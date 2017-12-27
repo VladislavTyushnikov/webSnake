@@ -1,0 +1,488 @@
+<!--suppress ALL -->
+<style>
+    html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    #mainScen {
+        position: absolute;
+        top: 0%;
+        left: 0%;
+        width: 100%;
+        height: 100%
+    }
+</style>
+
+<canvas id="mainScen" width="500" height="500"></canvas>
+
+<script>
+	//var sockStr = "ws://212.164.219.67:3000";
+	var sockStr = "ws://127.0.0.1:3000";
+    'use strict';
+
+    class Point {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    class Apple {
+        constructor(x, y, width, height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+
+        isDotInside(x, y) {
+            if (x >= this.x && y >= this.y && x <= this.x + this.width && y <= this.y + this.height)
+                return true;
+            return false;
+        }
+
+        draw(gr) {
+            gr.strokeStyle = "#c4c4c4";
+            gr.fillStyle = "#ff4a4a";
+            gr.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+
+    class Snake {
+        constructor(points, lenSnake, width, lenSegment, headStepVec, lenHeadStep, speedRotate) {
+            this.points = points;
+            this.width = width;
+            this.lenSnake = lenSnake;
+            this.lenSegment = lenSegment;
+            this.headStepVec = this.getNormVec(headStepVec);
+            this.lenHeadStep = lenHeadStep;
+            this.speedRotate = speedRotate;
+        }
+
+        rotateHeadStepVec(direction) {
+
+            var alf = Math.atan2(this.headStepVec.y, this.headStepVec.x);
+            if (direction == 'l') {
+                alf -= this.speedRotate;
+            } else if (direction == 'r') {
+                alf += this.speedRotate;
+            } else return -1;
+
+            //var x = Math.cos(alf);
+            // var y = Math.sin(alf);
+            this.headStepVec.x = Math.cos(alf);
+            this.headStepVec.y = Math.sin(alf);
+        }
+
+        isTouchApple(apple) {
+            var head = this.points[this.points.length - 1];
+            var headX = head.x + this.headStepVec.x * this.lenHeadStep;
+            var headY = head.y + this.headStepVec.y * this.lenHeadStep;
+            return apple.isDotInside(headX, headY);
+        }
+
+        step() {
+            var points = this.points;
+            var head = this.points[this.points.length - 1];
+
+            //var lastVecToNextPoint = this.getVec(points[points.length - 2], head);
+            //lastVecToNextPoint = this.getNormVec(lastVecToNextPoint);
+
+            while (points.length < this.lenSnake)
+                points.unshift(new Point(points[0].x, points[0].y));
+
+            head.x += this.headStepVec.x * this.lenHeadStep;
+            head.y += this.headStepVec.y * this.lenHeadStep;
+
+            for (var i = points.length - 2; i >= 0; i--) {
+                var vecToNextPoint = this.getVec(points[i], points[i + 1]);
+                var nowLen = this.getLenVec(vecToNextPoint);
+
+                if (this.lenSegment < nowLen) { // Если необходимо передвинуть текущий сегмент
+                    vecToNextPoint = this.getNormVec(vecToNextPoint);
+                    //var b = new Point(lastVecToNextPoint.x, lastVecToNextPoint.y);// = this.getNormVec(vecToNextPoint);
+                    //if (i != 0)
+                    //    lastVecToNextPoint = this.getVec(points[i - 1], points[i]);
+                    //lastVecToNextPoint = this.getNormVec(lastVecToNextPoint);
+                    points[i].x += vecToNextPoint.x * (nowLen - this.lenSegment);
+                    points[i].y += vecToNextPoint.y * (nowLen - this.lenSegment);
+                }
+
+            }
+
+            /*var points = this.points;
+            var head = this.points[this.points.length - 1];
+
+
+
+            for (var i = 0; i < points.length - 1; i++) {
+                var vecToNextPoint = this.getVec(points[i], points[i + 1]);
+                var nowLen = this.getLenVec(vecToNextPoint);
+
+                if (this.lenSegment < nowLen) { // Если необходимо передвинуть текущий сегмент
+                    vecToNextPoint = this.getNormVec(vecToNextPoint);
+                    points[i].x += vecToNextPoint.x * this.lenHeadStep ;
+                    points[i].y += vecToNextPoint.y * this.lenHeadStep ;
+                } else if (this.lenSegment < nowLen * 2){
+                    vecToNextPoint = this.getNormVec(vecToNextPoint);
+                    points[i].x += vecToNextPoint.x * this.lenHeadStep / 2;
+                    points[i].y += vecToNextPoint.y * this.lenHeadStep / 2;
+                }
+            }
+
+            head.x += this.headStepVec.x * this.lenHeadStep;
+            head.y += this.headStepVec.y * this.lenHeadStep;*/
+        }
+
+        draw(gr) {
+
+            var points = this.points;
+            var p3Last;
+            var p4Last;
+
+            for (var i = 0; i < points.length - 1; i++) {
+
+                if (points[i].x == points[i + 1].x && points[i].y == points[i + 1].y)
+                    continue;
+
+                var nowPoint = points[i];
+                var nextPoint = points[i + 1];
+
+                var vecToNexPoint = new Point(nextPoint.x - nowPoint.x, nextPoint.y - nowPoint.y);
+                var perpendicular = this.getPerpendicular(vecToNexPoint);
+
+                var p1 = new Point(points[i].x + perpendicular.x * this.width, points[i].y + perpendicular.y * this.width);
+                var p2 = new Point(points[i].x - perpendicular.x * this.width, points[i].y - perpendicular.y * this.width);
+                var p3 = new Point(p1.x + vecToNexPoint.x, p1.y + vecToNexPoint.y);
+                var p4 = new Point(p2.x + vecToNexPoint.x, p2.y + vecToNexPoint.y);
+                vecToNexPoint = null;
+
+
+                if (p3Last != undefined) {
+                    //if (p3Last.x < p1.x)
+                    this.drawTriangle(nowPoint, p1, p3Last, gr);
+                    //else
+                    this.drawTriangle(nowPoint, p2, p4Last, gr);
+                }
+                this.drawQuad(p1, p2, p3, p4, gr);
+
+                p3Last = p3;
+                p4Last = p4;
+
+            }
+
+            /*for (var i = 0; i < points.length - 1; i++) {
+
+                //gr.fillRect(points[i].x, points[i].y, 30,30);
+                //drawQuad(points[i],);
+                /*gr.beginPath();
+                gr.moveTo(points[i].x, points[i].y);
+                gr.lineTo(points[i].x + 30, points[i].y);
+                gr.lineTo(points[i].x + 30, points[i].y + 30);
+                gr.lineTo(points[i].x, points[i].y + 30);
+                gr.lineTo(points[i].x, points[i].y);
+
+                gr.closePath();
+                gr.stroke();
+                gr.fill();
+                gr.
+                gr.beginPath();
+                gr.arc(points[i].x, points[i].y, 30, 0, 2*Math.PI, false);
+                gr.fillStyle = 'red';
+                gr.fill();
+                gr.lineWidth = 1;
+                gr.strokeStyle = 'red';
+                gr.stroke();
+
+            }*/
+            var pointHead = new Point(points[points.length - 1].x, points[points.length - 1].y);
+            pointHead.x += this.headStepVec.x * this.lenSegment;
+            pointHead.y += this.headStepVec.y * this.lenSegment;
+            this.drawTriangle(pointHead, p3Last, p4Last, gr);
+        }
+
+        getVec(pFrom, pTo) {
+            var x = pTo.x - pFrom.x;
+            var y = pTo.y - pFrom.y;
+            return new Point(x, y);
+        }
+
+        getLenVec(vec) {
+            var len = Math.sqrt(vec.x * vec.x + vec.y * vec.y);
+            return len;
+        }
+
+        getNormVec(vec) {
+            var len = this.getLenVec(vec);
+            var resVec = new Point(vec.x / len, vec.y / len);
+            return resVec;
+        }
+
+        getPerpendicular(vec) {
+            var alf = Math.atan2(vec.y, vec.x);
+            alf += 3.14 / 2;
+            var x = Math.cos(alf);
+            var y = Math.sin(alf);
+            var perpendicular = new Point(x, y);
+            return perpendicular;
+        }
+
+        drawTriangle(p1, p2, p3, gr) {
+            gr.strokeStyle = "#000";
+            gr.fillStyle = "#fc0";
+
+            //(200,200,100,0, Math.PI,true);
+
+            gr.beginPath();
+            gr.moveTo(p1.x, p1.y);
+            gr.lineTo(p2.x, p2.y);
+            gr.lineTo(p3.x, p3.y);
+            gr.lineTo(p1.x, p1.y);
+            gr.closePath();
+            gr.stroke();
+            gr.fill();
+
+        }
+
+        drawQuad(p1, p2, p3, p4, gr) {
+            var points = [p1, p2, p3, p4];
+
+            // points[0]         points[1]
+            //
+            // points[2]         points[3]
+
+            points.sort(function (a, b) {
+                return a.y - b.y;
+            })
+
+            if (points[0].x > points[1].x) {
+                var b = points[1];
+                points[1] = points[0];
+                points[0] = b;
+            }
+
+            if (points[2].x > points[3].x) {
+                var b = points[3];
+                points[3] = points[2];
+                points[2] = b;
+            }
+
+            gr.strokeStyle = "#000";
+            gr.fillStyle = "#fc0";
+
+            gr.beginPath();
+            gr.moveTo(points[0].x, points[0].y);
+            gr.lineTo(points[1].x, points[1].y);
+            gr.lineTo(points[3].x, points[3].y);
+            gr.lineTo(points[2].x, points[2].y);
+            gr.lineTo(points[0].x, points[0].y);
+
+            gr.closePath();
+            gr.stroke();
+            gr.fill();
+        }
+
+        setHeadStepVec(headStepVec) {
+            this.headStepVec = this.getNormVec(headStepVec);
+        }
+    }
+
+    var snakes = {};
+    var apples = [];
+    var myId;
+
+    //var mySnake = new Snake([], 50, 15, 30, new Point(1, 0), 2, 0.05);
+
+    //for (var i = 0; i < 1; i++)
+    //mySnake.points.push(new Point(100 + i * 5, 100));
+
+    if (!window.WebSocket) {
+        document.body.innerHTML = 'WebSocket в этом браузере не поддерживается.';
+    }
+
+    var graphics;
+    var canvas;
+
+    var pressedKeys = {};
+    var mouse = {
+        x: 0,
+        y: 0
+    }
+
+    // создать подключение
+    var socket = new WebSocket(sockStr);
+    // обработчик входящих сообщений
+
+    socket.onmessage = function (event) {
+        var message = event.data;
+        //rects.lenght = 0;
+        //points.length = 0;
+        var buf = message.split('|');
+        if (buf[0] == 0) {
+            myId = parseInt(buf[1], 10);
+            var x = parseInt(buf[2], 10);
+            var y = parseInt(buf[3], 10);
+            var len = parseInt(buf[4], 10);
+            var dirx = parseFloat(buf[5]);
+            var diry = parseFloat(buf[6]);
+            snakes[myId] = new Snake([new Point(x, y)], len, 15, 30, new Point(dirx, diry), 4, 0.05);
+        } else if (buf[0] == 1) {
+            for (var i = 1; i < buf.length; i += 6) {
+                var id = parseInt(buf[i], 10);
+                var x = parseInt(buf[i + 1], 10);
+                var y = parseInt(buf[i + 2], 10);
+                var len = parseInt(buf[i + 3], 10);
+                var dirx = parseFloat(buf[i + 4]);
+                var diry = parseFloat(buf[i + 5]);
+                snakes[id] = new Snake([new Point(x, y)], len, 15, 30, new Point(dirx, diry), 4, 0.05);
+            }
+        } else if (buf[0] == 3) {
+            var i = 1;
+            while (i < buf.length) {
+                var id = parseInt(buf[i], 10);
+                if (buf[i + 1] == "l" || buf[i + 1] == "r") {
+                    var len = buf[i + 1].length;
+                    var pressedKeys = new Object();
+                    for (var j = 0; j < len; j++) {
+                        pressedKeys[buf[i + 1 + j]] = 1;
+                    }
+                    snakes[id].pressedKeys = null;
+                    snakes[id].pressedKeys = pressedKeys;
+                    i += len;
+                } else {
+                    //var pressedKeys = new Object();
+                    snakes[id].pressedKeys = null;
+                }
+                i++;
+            }
+        } else if (buf[0] == 4) {
+            for (var i = 1; i < buf.length; i += 2) {
+                var x = parseInt(buf[i], 10);
+                var y = parseInt(buf[i + 1], 10);
+                apples.push(new Apple(x, y, 30, 30));
+
+            }
+        }
+
+        if (buf[0] == 3) {
+
+            for (var sn in snakes) {
+                for (var key in snakes[sn].pressedKeys) {
+                    if (snakes[sn].pressedKeys[key] == 1)
+                        snakes[sn].rotateHeadStepVec(key);
+                }
+            }
+
+            for (var sn in snakes)
+                snakes[sn].step();
+
+            for (var sn in snakes) {
+                for (var ap in apples) {
+                    if (snakes[sn].isTouchApple(apples[ap])) {
+                        snakes[sn].lenSnake += 1; // Змейка съевшая яблочко выросла
+                        apples.splice(ap, 1); // Удаляем яблочко
+                        break;
+                        //ap--;
+                    }
+                }
+            }
+        }
+
+        addRotateIfNeed();
+
+    };
+
+    window.onload = function () {
+        canvas = document.getElementById("mainScen");
+        canvas.width = document.documentElement.clientWidth;
+        canvas.height = document.documentElement.clientHeight;
+
+        graphics = canvas.getContext("2d");
+
+        document.addEventListener("keydown", keyDown);
+        document.addEventListener("keyup", keyUp);
+        document.addEventListener("mousemove", mouseMove);
+        draw();
+    }
+
+    function draw() {
+        canvas.width = canvas.width;
+        for (var sn in snakes)
+            snakes[sn].draw(graphics);
+        for (var ap in apples)
+            apples[ap].draw(graphics);
+
+        requestAnimationFrame(draw);
+
+    }
+
+    function addRotateIfNeed() {
+        var vecSnakeStep = new Point(snakes[myId].headStepVec.x, snakes[myId].headStepVec.y);
+
+        var vecMouseRelativSnake = snakes[myId].getVec(snakes[myId].points[snakes[myId].points.length - 1], mouse);// new Point(mouse.x - mySnake.points[mySnake.points.length].x, mouse.y - mySnake.points[mySnake.points.length].y);
+        vecMouseRelativSnake = snakes[myId].getNormVec(vecMouseRelativSnake)
+        var vecMul = vecSnakeStep.x * vecMouseRelativSnake.y - vecMouseRelativSnake.x * vecSnakeStep.y;
+        if (vecMul > 0.05) {
+            addPressedKeyIfNeed('r');
+            deletePressedKeyIfNeed('l');
+        } else if (vecMul < -0.05) {
+            addPressedKeyIfNeed('l');
+            deletePressedKeyIfNeed('r');
+        } else {
+            deletePressedKeyIfNeed('l');
+            deletePressedKeyIfNeed('r');
+        }
+
+        /*if (pressedKeys['l'] == 1)
+            snakes[myId].rotateHeadStepVec(true);
+        if (pressedKeys['r'] == 1)
+            snakes[myId].rotateHeadStepVec(false);*/
+    }
+
+    function addPressedKeyIfNeed(key) {
+
+        if (pressedKeys[key] != 1) {
+            pressedKeys[key] = 1;
+            socket.send("d" + key);
+        }
+    }
+
+    function deletePressedKeyIfNeed(key) {
+        if (pressedKeys[key] == 1) {
+            pressedKeys[key] = -1;
+            socket.send("u" + key);
+        }
+    }
+
+    function keyUp(evt) {
+        var key = getKey(evt);
+        deletePressedKeyIfNeed(key);
+    }
+
+    function keyDown(evt) {
+        var key = getKey(evt);
+        addPressedKeyIfNeed(key);
+    }
+
+    function getKey(evt) {
+        switch (evt.keyCode) {
+            case 37:    // left
+                return ('l');
+                break;
+            case 39:    // right
+                return ('r');
+                break;
+        }
+        return ('err')
+    }
+
+    function mouseMove(evt) {
+        mouse.x = evt.pageX;
+        mouse.y = evt.pageY;
+
+    };
+
+</script>
